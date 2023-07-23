@@ -14,7 +14,6 @@ from fastapi.responses import JSONResponse
 
 app=FastAPI()
 envs=dict(dotenv_values(".env"))
-ses.ses_init(envs['FE_HOST'])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 @app.post("/users/")
@@ -33,7 +32,7 @@ async def get_token(user: models.User):
     if verified:
         now = datetime.utcnow()
         expires = now + timedelta(minutes=180)
-        jwt_payload = {"sub":existing_user["email"],"iat":now,"exp":expires}
+        jwt_payload = {"sub":existing_user["email"],"iat":now,"exp":expires,"created":str(existing_user["created"])}
         token = jwt.encode(jwt_payload,envs["SECRET"])
         return {"token":token}
     else:
@@ -82,12 +81,14 @@ async def reset_password(user:models.User,email:str,authorization: Annotated[Uni
     
 
 @app.post("/users/{email}/forgot-password")
-async def forgot_password(email:str,authorization: Annotated[Union[str, None], Header()] = None):
+async def forgot_password(email:str):
     try:
-        decodable = jwt.decode(authorization.split()[1],key=envs["SECRET"])
-        if decodable["sub"] == email:
-            ses.send_email(email)
-            return {"message":"password reset link sent"}
+        now = datetime.utcnow()
+        expires = now + timedelta(minutes=180)
+        jwt_payload = {"task":"reset-password","iat":now,"exp":expires}
+        token = jwt.encode(jwt_payload,envs["SECRET"])
+        ses.send_email(email,token,envs["FE_HOST"])
+        return {"message":"password reset link sent"}
     except Exception as error:
         print(error)
         return JSONResponse(status_code=403,content={"message": "invalid credentials"})

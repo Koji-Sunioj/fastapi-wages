@@ -2,22 +2,9 @@ import boto3
 
 ses_client = boto3.client('ses')
 
-def ses_init(host:str):
-    templates = ses_client.list_templates(
-        MaxItems=10
-    )
-    template_strings = [template["Name"] for template in templates["TemplatesMetadata"]] if len(templates["TemplatesMetadata"]) > 0 else []
-    if "FASTAPI_RESET_TOKEN" not in template_strings:
-        link = '<p>please follow this <a href=http://%s>link</a> to reset your password.</p>' % (host)
-        template = ses.create_template(
-        Template = {
-            'TemplateName' : 'FASTAPI_RESET_TOKEN',
-            'SubjectPart'  : 'Reset your password',
-            'TextPart'     : 'Hello you son of a bitch',
-            'HtmlPart'     : link
-        })
-
-def send_email(email:str):
+def send_email(email:str,token:str,website:str):
+    template_string = '{\"token\":\"%s\",\"website\":\"%s\"}' % (token,website)
+    print(template_string)
     ses_client.send_templated_email(
         Source='noreply@ironpond.net',
         Destination={
@@ -26,5 +13,5 @@ def send_email(email:str):
         },
         ReplyToAddresses=['noreply@ironpond.net'],
         Template='FASTAPI_RESET_TOKEN',
-        TemplateData="{}"
-    )
+        TemplateData='{"token":"%s","website":"%s","email":"%s"}' % (token,website,email)
+        )

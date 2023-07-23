@@ -22,7 +22,7 @@ def one_to_dict(cursor):
 
 def select_one_user(email:str,retrieve_pwd=False):
     cursor = conn.cursor()
-    parameter = "password" if retrieve_pwd else "created"
+    parameter = "password,created" if retrieve_pwd else "created"
     command = "select email,%s from wages_users where email='%s'" % (parameter,email)
     cursor.execute(command)
     existing_user = one_to_dict(cursor)
