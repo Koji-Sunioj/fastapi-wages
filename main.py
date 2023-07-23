@@ -1,5 +1,7 @@
+import boto3
 import models
 import dbfunctions
+import ses
 from typing import Union
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -12,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 app=FastAPI()
 envs=dict(dotenv_values(".env"))
+ses.ses_init(envs['FE_HOST'])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 @app.post("/users/")
@@ -25,24 +28,24 @@ async def create_user(user: models.User):
 
 @app.post("/sign-in/")
 async def get_token(user: models.User):           
-    existing_user = dbfunctions.select_one_user(user.username,retrieve_pwd=True)
+    existing_user = dbfunctions.select_one_user(user.email,retrieve_pwd=True)
     verified = pwd_context.verify(user.password, existing_user["password"])
     if verified:
         now = datetime.utcnow()
         expires = now + timedelta(minutes=180)
-        jwt_payload = {"sub":existing_user["username"],"iat":now,"exp":expires}
+        jwt_payload = {"sub":existing_user["email"],"iat":now,"exp":expires}
         token = jwt.encode(jwt_payload,envs["SECRET"])
         return {"token":token}
     else:
         return JSONResponse(status_code=403,content={"message": "invalid credentials"})
 
     
-@app.get("/users/{username}")
-async def get_user(username:str,authorization: Annotated[Union[str, None], Header()] = None):
+@app.get("/users/{email}")
+async def get_user(email:str,authorization: Annotated[Union[str, None], Header()] = None):
     try:
         decodable = jwt.decode(authorization.split()[1],key=envs["SECRET"])
-        if decodable["sub"] == username:
-            existing_user = dbfunctions.select_one_user(username)
+        if decodable["sub"] == email:
+            existing_user = dbfunctions.select_one_user(email)
             return {"user": existing_user}
         else: 
             raise Exception({"message":"user not found","code":404})
@@ -62,12 +65,12 @@ async def check_token(token:str):
     except Exception as error:
         return JSONResponse(status_code=403,content={"message": "invalid credentials"})
 
-@app.patch("/users/{username}/reset-password")
-async def reset_password(user:models.User,username:str,authorization: Annotated[Union[str, None], Header()] = None):
+@app.patch("/users/{email}/reset-password")
+async def reset_password(user:models.User,email:str,authorization: Annotated[Union[str, None], Header()] = None):
     try:
         decodable = jwt.decode(authorization.split()[1],key=envs["SECRET"])
-        existing_user = dbfunctions.select_one_user(username,retrieve_pwd=True)
-        valid_request = [value == decodable["sub"] for value in [existing_user["username"],user.username]] 
+        existing_user = dbfunctions.select_one_user(email,retrieve_pwd=True)
+        valid_request = [value == decodable["sub"] for value in [existing_user["email"],user.email]] 
         if all(valid_request):
             dbfunctions.update_user_password(user)
             return {"message":"successfully updated password"}
@@ -78,3 +81,13 @@ async def reset_password(user:models.User,username:str,authorization: Annotated[
         return JSONResponse(status_code=403,content={"message": "invalid credentials"})
     
 
+@app.post("/users/{email}/forgot-password")
+async def forgot_password(email:str,authorization: Annotated[Union[str, None], Header()] = None):
+    try:
+        decodable = jwt.decode(authorization.split()[1],key=envs["SECRET"])
+        if decodable["sub"] == email:
+            ses.send_email(email)
+            return {"message":"password reset link sent"}
+    except Exception as error:
+        print(error)
+        return JSONResponse(status_code=403,content={"message": "invalid credentials"})
