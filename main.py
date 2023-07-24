@@ -11,8 +11,19 @@ from typing_extensions import Annotated
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
+origins = ["http://localhost:3000"]
 app=FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 envs=dict(dotenv_values(".env"))
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -20,24 +31,29 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 async def create_user(user: models.User):
     try:
         dbfunctions.insert_user(user)
-        return JSONResponse(status_code=200,content={"message": "successfully created user"})
+        return JSONResponse(status_code=200,content={"message": "successfully created user. please sign in with your new password."})
     except Exception as error:
         print(error)
         return JSONResponse(status_code=409,content={"message": "user already exists"})    
 
 @app.post("/sign-in/")
-async def get_token(user: models.User):           
-    existing_user = dbfunctions.select_one_user(user.email,retrieve_pwd=True)
-    verified = pwd_context.verify(user.password, existing_user["password"])
-    if verified:
-        now = datetime.utcnow()
-        expires = now + timedelta(minutes=180)
-        jwt_payload = {"sub":existing_user["email"],"iat":now,"exp":expires,"created":str(existing_user["created"])}
-        token = jwt.encode(jwt_payload,envs["SECRET"])
-        return {"token":token}
-    else:
-        return JSONResponse(status_code=403,content={"message": "invalid credentials"})
-
+async def get_token(user: models.User):
+    print(user)
+    try:           
+        existing_user = dbfunctions.select_one_user(user.email,retrieve_pwd=True)
+        verified = pwd_context.verify(user.password, existing_user["password"])
+        if verified:
+            now = datetime.utcnow()
+            expires = now + timedelta(minutes=180)
+            jwt_payload = {"sub":existing_user["email"],"iat":now,"exp":expires,"created":str(existing_user["created"])}
+            token = jwt.encode(jwt_payload,envs["SECRET"])
+            jwt_payload.update({"token":token})
+            return jwt_payload
+        else:
+            return JSONResponse(status_code=403,content={"message": "invalid credentials"})
+    except Exception as error:
+        print(error)
+        return JSONResponse(status_code=400,content={"message": "invalid credentials"})
     
 @app.get("/users/{email}")
 async def get_user(email:str,authorization: Annotated[Union[str, None], Header()] = None):
@@ -56,17 +72,19 @@ async def get_user(email:str,authorization: Annotated[Union[str, None], Header()
 @app.get("/check-session")
 async def check_token(token:str):
     try:
-        decodable = jwt.decode(token,key=envs["SECRET"])
+        jwt_payload = jwt.decode(token,key=envs["SECRET"])
         is_expired = datetime.utcnow() > datetime.utcfromtimestamp(decodable["exp"])
         if is_expired:
-            raise Exception("expired token")
-        return {"message":"valid token"}
+            raise Exception("expired token") 
+        jwt_payload.update({"token":token})     
+        return jwt_payload
     except Exception as error:
         return JSONResponse(status_code=403,content={"message": "invalid credentials"})
 
 @app.patch("/users/{email}/reset-password")
 async def reset_password(user:models.User,email:str,authorization: Annotated[Union[str, None], Header()] = None):
     try:
+        print(authorization)
         decodable = jwt.decode(authorization.split()[1],key=envs["SECRET"])
         existing_user = dbfunctions.select_one_user(email,retrieve_pwd=True)
         valid_request = [value == decodable["sub"] for value in [existing_user["email"],user.email]] 
