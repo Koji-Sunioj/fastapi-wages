@@ -1,7 +1,7 @@
 import boto3
 import models
 import dbfunctions
-import ses
+import utils
 from typing import Union
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -12,6 +12,9 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException
+from fastapi.responses import PlainTextResponse
+from fastapi.exceptions import RequestValidationError
 
 origins = ["http://localhost:3000"]
 app=FastAPI()
@@ -27,14 +30,20 @@ app.add_middleware(
 envs=dict(dotenv_values(".env"))
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+""" @app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    print( vars(RequestValidationError) )
+    print(exc)
+    return PlainTextResponse(str(exc), status_code=400)
+  """
+
 @app.post("/users/")
 async def create_user(user: models.User):
     try:
         dbfunctions.insert_user(user)
         return JSONResponse(status_code=200,content={"message": "successfully created user. please sign in with your new password."})
     except Exception as error:
-        print(error)
-        return JSONResponse(status_code=409,content={"message": "user already exists"})    
+        return JSONResponse(status_code=400,content={"message": "user already exists"})    
 
 @app.post("/sign-in/")
 async def get_token(user: models.User):
@@ -73,18 +82,18 @@ async def get_user(email:str,authorization: Annotated[Union[str, None], Header()
 async def check_token(token:str):
     try:
         jwt_payload = jwt.decode(token,key=envs["SECRET"])
-        is_expired = datetime.utcnow() > datetime.utcfromtimestamp(decodable["exp"])
+        is_expired = datetime.utcnow() > datetime.utcfromtimestamp(jwt_payload["exp"])
         if is_expired:
             raise Exception("expired token") 
-        jwt_payload.update({"token":token})     
+        jwt_payload.update({"token":token})    
         return jwt_payload
     except Exception as error:
+        print(error)
         return JSONResponse(status_code=403,content={"message": "invalid credentials"})
 
 @app.patch("/users/{email}/reset-password")
 async def reset_password(user:models.User,email:str,authorization: Annotated[Union[str, None], Header()] = None):
     try:
-        print(authorization)
         decodable = jwt.decode(authorization.split()[1],key=envs["SECRET"])
         existing_user = dbfunctions.select_one_user(email,retrieve_pwd=True)
         valid_request = [value == decodable["sub"] for value in [existing_user["email"],user.email]] 
@@ -103,9 +112,9 @@ async def forgot_password(email:str):
     try:
         now = datetime.utcnow()
         expires = now + timedelta(minutes=180)
-        jwt_payload = {"task":"reset-password","iat":now,"exp":expires}
+        jwt_payload = {"task":"reset-password","iat":now,"exp":expires,"sub":email}
         token = jwt.encode(jwt_payload,envs["SECRET"])
-        ses.send_email(email,token,envs["FE_HOST"])
+        utils.send_email(email,token,envs["FE_HOST"])
         return {"message":"password reset link sent"}
     except Exception as error:
         print(error)

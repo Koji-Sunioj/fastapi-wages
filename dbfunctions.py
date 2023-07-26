@@ -4,6 +4,7 @@ import models
 from pydantic import BaseModel
 from dotenv import dotenv_values
 from passlib.context import CryptContext
+import utils
 
 envs=dict(dotenv_values(".env"))
 conn= psycopg2.connect(database=envs["DB_NAME"],
@@ -14,18 +15,12 @@ conn= psycopg2.connect(database=envs["DB_NAME"],
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def one_to_dict(cursor):
-    values = list(cursor.fetchone())
-    columns = [column[0] for column in cursor.description]
-    pointers = {column:value for column,value in zip(columns,values)}
-    return pointers
-
 def select_one_user(email:str,retrieve_pwd=False):
     cursor = conn.cursor()
     parameter = "password,created" if retrieve_pwd else "created"
     command = "select email,%s from wages_users where email='%s'" % (parameter,email)
     cursor.execute(command)
-    existing_user = one_to_dict(cursor)
+    existing_user = utils.one_to_dict(cursor)
     return existing_user
 
 def update_user_password(user:models.User):
@@ -35,6 +30,7 @@ def update_user_password(user:models.User):
     conn.commit()
 
 def insert_user(user:models.User):
+    conn.autocommit = True
     cursor = conn.cursor()
     command = "insert into wages_users (email,password) values ('%s','%s')" % (user.email,pwd_context.hash(user.password))
     cursor.execute(command)
