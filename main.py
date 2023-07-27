@@ -13,8 +13,8 @@ from datetime import datetime, timedelta
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException
-from fastapi.responses import PlainTextResponse
 from fastapi.exceptions import RequestValidationError
+import fastapi.exceptions
 
 origins = ["http://localhost:3000"]
 app=FastAPI()
@@ -26,28 +26,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+print(fastapi.exceptions)
 
 envs=dict(dotenv_values(".env"))
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-""" @app.exception_handler(RequestValidationError)
+@app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    print( vars(RequestValidationError) )
-    print(exc)
-    return PlainTextResponse(str(exc), status_code=400)
-  """
+    errors = vars(exc)["_errors"]
+    message = "missing %s" %  (", ".join([item["loc"][1] for item in errors]))
+    return JSONResponse({"detail":message}, status_code=422)
+ 
 
 @app.post("/users/")
 async def create_user(user: models.User):
     try:
         dbfunctions.insert_user(user)
-        return JSONResponse(status_code=200,content={"message": "successfully created user. please sign in with your new password."})
+        return JSONResponse(status_code=200,content={"detail": "successfully created user. please sign in with your new password."})
     except Exception as error:
-        return JSONResponse(status_code=400,content={"message": "user already exists"})    
+        return JSONResponse(status_code=400,content={"detail": "user already exists"})    
 
 @app.post("/sign-in/")
 async def get_token(user: models.User):
-    print(user)
     try:           
         existing_user = dbfunctions.select_one_user(user.email,retrieve_pwd=True)
         verified = pwd_context.verify(user.password, existing_user["password"])
@@ -59,10 +59,9 @@ async def get_token(user: models.User):
             jwt_payload.update({"token":token})
             return jwt_payload
         else:
-            return JSONResponse(status_code=403,content={"message": "invalid credentials"})
+            return JSONResponse(status_code=403,content={"detail": "invalid credentials"})
     except Exception as error:
-        print(error)
-        return JSONResponse(status_code=400,content={"message": "invalid credentials"})
+        return JSONResponse(status_code=400,content={"detail": "invalid credentials"})
     
 @app.get("/users/{email}")
 async def get_user(email:str,authorization: Annotated[Union[str, None], Header()] = None):
@@ -72,11 +71,11 @@ async def get_user(email:str,authorization: Annotated[Union[str, None], Header()
             existing_user = dbfunctions.select_one_user(email)
             return {"user": existing_user}
         else: 
-            raise Exception({"message":"user not found","code":404})
+            raise Exception({"detail":"user not found","code":404})
     except Exception as error:
         parsed_error = error.args[0]
-        error = {"code":403,"message":"invalid credentials"} if isinstance(parsed_error, str) else parsed_error
-        return JSONResponse(status_code=error["code"],content={"message": error["message"]})
+        error = {"code":403,"detail":"invalid credentials"} if isinstance(parsed_error, str) else parsed_error
+        return JSONResponse(status_code=error["code"],content={"detail": error["message"]})
 
 @app.get("/check-session")
 async def check_token(token:str):
@@ -89,7 +88,7 @@ async def check_token(token:str):
         return jwt_payload
     except Exception as error:
         print(error)
-        return JSONResponse(status_code=403,content={"message": "invalid credentials"})
+        return JSONResponse(status_code=403,content={"detail": "invalid credentials"})
 
 @app.patch("/users/{email}/reset-password")
 async def reset_password(user:models.User,email:str,authorization: Annotated[Union[str, None], Header()] = None):
@@ -99,12 +98,12 @@ async def reset_password(user:models.User,email:str,authorization: Annotated[Uni
         valid_request = [value == decodable["sub"] for value in [existing_user["email"],user.email]] 
         if all(valid_request):
             dbfunctions.update_user_password(user)
-            return {"message":"successfully updated password"}
+            return {"detail":"successfully updated password"}
         else:
             raise Exception("user mismatch")
     except Exception as error:
         print(error)
-        return JSONResponse(status_code=403,content={"message": "invalid credentials"})
+        return JSONResponse(status_code=403,content={"detail": "invalid credentials"})
     
 
 @app.post("/users/{email}/forgot-password")
@@ -115,7 +114,7 @@ async def forgot_password(email:str):
         jwt_payload = {"task":"reset-password","iat":now,"exp":expires,"sub":email}
         token = jwt.encode(jwt_payload,envs["SECRET"])
         utils.send_email(email,token,envs["FE_HOST"])
-        return {"message":"password reset link sent"}
+        return {"detail":"password reset link sent"}
     except Exception as error:
         print(error)
-        return JSONResponse(status_code=403,content={"message": "invalid credentials"})
+        return JSONResponse(status_code=403,content={"detail": "invalid credentials"})
