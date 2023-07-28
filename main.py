@@ -1,10 +1,9 @@
-import boto3
 import models
 import dbfunctions
 import utils
+import uvicorn
 from typing import Union
-from jose import JWTError, jwt
-from pydantic import BaseModel
+from jose import jwt
 from dotenv import dotenv_values
 from fastapi import FastAPI,Header
 from typing_extensions import Annotated
@@ -12,7 +11,6 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.exceptions import HTTPException
 from fastapi.exceptions import RequestValidationError
 import fastapi.exceptions
 
