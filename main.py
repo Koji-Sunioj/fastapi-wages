@@ -24,9 +24,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-print(fastapi.exceptions)
 
-envs=dict(dotenv_values(".env"))
+frontend_envs=utils.get_db_envs("wages_frontend")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 @app.exception_handler(RequestValidationError)
@@ -53,7 +52,7 @@ async def get_token(user: models.User):
             now = datetime.utcnow()
             expires = now + timedelta(minutes=180)
             jwt_payload = {"sub":existing_user["email"],"iat":now,"exp":expires,"created":str(existing_user["created"])}
-            token = jwt.encode(jwt_payload,envs["SECRET"])
+            token = jwt.encode(jwt_payload,frontend_envs["SECRET"])
             jwt_payload.update({"token":token})
             return jwt_payload
         else:
@@ -64,7 +63,7 @@ async def get_token(user: models.User):
 @app.get("/users/{email}")
 async def get_user(email:str,authorization: Annotated[Union[str, None], Header()] = None):
     try:
-        decodable = jwt.decode(authorization.split()[1],key=envs["SECRET"])
+        decodable = jwt.decode(authorization.split()[1],key=frontend_envs["SECRET"])
         if decodable["sub"] == email:
             existing_user = dbfunctions.select_one_user(email)
             return {"user": existing_user}
@@ -78,7 +77,7 @@ async def get_user(email:str,authorization: Annotated[Union[str, None], Header()
 @app.get("/check-session")
 async def check_token(token:str):
     try:
-        jwt_payload = jwt.decode(token,key=envs["SECRET"])
+        jwt_payload = jwt.decode(token,key=frontend_envs["SECRET"])
         is_expired = datetime.utcnow() > datetime.utcfromtimestamp(jwt_payload["exp"])
         if is_expired:
             raise Exception("expired token") 
@@ -91,7 +90,7 @@ async def check_token(token:str):
 @app.patch("/users/{email}/reset-password")
 async def reset_password(user:models.User,email:str,authorization: Annotated[Union[str, None], Header()] = None):
     try:
-        decodable = jwt.decode(authorization.split()[1],key=envs["SECRET"])
+        decodable = jwt.decode(authorization.split()[1],key=frontend_envs["SECRET"])
         existing_user = dbfunctions.select_one_user(email,retrieve_pwd=True)
         valid_request = [value == decodable["sub"] for value in [existing_user["email"],user.email]] 
         if all(valid_request):
@@ -110,8 +109,8 @@ async def forgot_password(email:str):
         now = datetime.utcnow()
         expires = now + timedelta(minutes=180)
         jwt_payload = {"task":"reset-password","iat":now,"exp":expires,"sub":email}
-        token = jwt.encode(jwt_payload,envs["SECRET"])
-        utils.send_email(email,token,envs["FE_HOST"])
+        token = jwt.encode(jwt_payload,frontend_envs["SECRET"])
+        utils.send_email(email,token,frontend_envs["FE_HOST"])
         return {"detail":"password reset link sent"}
     except Exception as error:
         print(error)

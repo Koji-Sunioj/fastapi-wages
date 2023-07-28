@@ -6,12 +6,13 @@ from dotenv import dotenv_values
 from passlib.context import CryptContext
 import utils
 
-envs=dict(dotenv_values(".env"))
-conn= psycopg2.connect(database=envs["DB_NAME"],
-                        host=envs["DB_HOST"],
-                        user=envs["USER"],
-                        password=envs["PWD"],
-                        port=envs["PORT"])
+db_envs = utils.get_db_envs('wages_secrets')
+print(db_envs)
+conn=psycopg2.connect(database=db_envs["DB_NAME"],
+                        host=db_envs["DB_HOST"],
+                        user=db_envs["USER"],
+                        password=db_envs["PWD"],
+                        port=db_envs["PORT"]) 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

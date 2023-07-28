@@ -1,4 +1,5 @@
 import boto3
+import json
 
 def send_email(email:str,token:str,website:str):
     ses_client = boto3.client('ses')
@@ -19,3 +20,10 @@ def one_to_dict(cursor):
     columns = [column[0] for column in cursor.description]
     pointers = {column:value for column,value in zip(columns,values)}
     return pointers
+
+def get_db_envs(secret_name):
+    ses_client = boto3.client('secretsmanager')
+    response = ses_client.get_secret_value(SecretId=secret_name)
+    return  json.loads(response["SecretString"])
+
+
