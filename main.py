@@ -1,3 +1,4 @@
+import os
 import models
 import dbfunctions
 import utils
@@ -25,8 +26,9 @@ app.add_middleware(
 )
 
 
-frontend_envs=utils.get_db_envs("wages_frontend")
+frontend_envs=utils.get_ssm_envs(os.environ.get("FE_SECRET"))
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+dbfunctions.init_tables()
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
@@ -41,6 +43,7 @@ async def create_user(user: models.User):
         dbfunctions.insert_user(user)
         return JSONResponse(status_code=200,content={"detail": "successfully created user. please sign in with your new password."})
     except Exception as error:
+        print(error)
         return JSONResponse(status_code=400,content={"detail": "user already exists"})    
 
 @app.post("/sign-in/")

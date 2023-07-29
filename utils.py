@@ -1,3 +1,4 @@
+import os
 import boto3
 import json
 
@@ -21,9 +22,9 @@ def one_to_dict(cursor):
     pointers = {column:value for column,value in zip(columns,values)}
     return pointers
 
-def get_db_envs(secret_name):
-    ses_client = boto3.client('secretsmanager')
-    response = ses_client.get_secret_value(SecretId=secret_name)
+def get_ssm_envs(secret_name):
+    ssm_client = boto3.client('secretsmanager')
+    response = ssm_client.get_secret_value(SecretId=secret_name)
     return  json.loads(response["SecretString"])
 
 
