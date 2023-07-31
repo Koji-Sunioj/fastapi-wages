@@ -3,7 +3,7 @@ import boto3
 import json
 
 def send_email(email:str,token:str,website:str):
-    ses_client = boto3.client('ses')
+    ses_client = boto3.client('ses',region_name='eu-north-1')
     template_string = '{\"token\":\"%s\",\"website\":\"%s\"}' % (token,website)
     ses_client.send_templated_email(
         Source='noreply@ironpond.net',
@@ -23,7 +23,7 @@ def one_to_dict(cursor):
     return pointers
 
 def get_ssm_envs(secret_name):
-    ssm_client = boto3.client('secretsmanager')
+    ssm_client = boto3.client('secretsmanager',region_name='eu-north-1')
     response = ssm_client.get_secret_value(SecretId=secret_name)
     return  json.loads(response["SecretString"])
 
