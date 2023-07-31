@@ -36,6 +36,9 @@ async def validation_exception_handler(request, exc):
     message = "missing %s" %  (", ".join([item["loc"][1] for item in errors]))
     return JSONResponse({"detail":message}, status_code=422)
  
+@app.get("/")
+async def test_ec2():
+    return JSONResponse(status_code=200,content={"detail":"server is running"})
 
 @app.post("/users/")
 async def create_user(user: models.User):
