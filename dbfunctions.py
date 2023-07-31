@@ -6,6 +6,7 @@ from dotenv import dotenv_values
 from passlib.context import CryptContext
 import utils
 
+print(os.environ)
 db_envs = utils.get_ssm_envs(os.environ.get("DB_SECRET"))
 """ envs=dict(dotenv_values(".env"))  """
 conn=psycopg2.connect(database=db_envs["dbname"],

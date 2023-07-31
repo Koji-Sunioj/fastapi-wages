@@ -24,7 +24,11 @@ def one_to_dict(cursor):
 
 def get_ssm_envs(secret_name):
     ssm_client = boto3.client('secretsmanager',region_name='eu-north-1')
-    response = ssm_client.get_secret_value(SecretId=secret_name)
-    return  json.loads(response["SecretString"])
+    print(secret_name)
+    try:
+        response = ssm_client.get_secret_value(SecretId=secret_name)
+        return  json.loads(response["SecretString"])
+    except Exception as error:
+        print(error)
 
 
